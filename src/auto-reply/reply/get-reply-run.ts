@@ -738,16 +738,23 @@ export async function runPreparedReply(
     };
   };
   let { activeSessionId, isActive, isStreaming } = resolveQueueBusyState();
-  const shouldSteer = resolvedQueue.mode === "steer" || resolvedQueue.mode === "steer-backlog";
+  // Reset-triggered turns must bypass steer/followup queue behavior and use
+  // interrupt semantics so `/new` and `/reset` are never delayed behind the
+  // active run (see GitHub issue #81).
+  const shouldSteer =
+    !effectiveResetTriggered &&
+    (resolvedQueue.mode === "steer" || resolvedQueue.mode === "steer-backlog");
   const shouldFollowup =
-    resolvedQueue.mode === "followup" ||
-    resolvedQueue.mode === "collect" ||
-    resolvedQueue.mode === "steer-backlog";
+    !effectiveResetTriggered &&
+    (resolvedQueue.mode === "followup" ||
+      resolvedQueue.mode === "collect" ||
+      resolvedQueue.mode === "steer-backlog");
+  const queueModeForActiveRun = effectiveResetTriggered ? "interrupt" : resolvedQueue.mode;
   const activeRunQueueAction = resolveActiveRunQueueAction({
     isActive,
     isHeartbeat: opts?.isHeartbeat === true,
     shouldFollowup,
-    queueMode: resolvedQueue.mode,
+    queueMode: queueModeForActiveRun,
   });
   if (isActive && activeRunQueueAction === "run-now") {
     const queueState = await resolvePreparedReplyQueueState({
