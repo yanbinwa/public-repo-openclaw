@@ -1457,6 +1457,7 @@ export async function runEmbeddedAttempt(
       }
       let prePromptMessageCount = activeSession.messages.length;
       let unwindowedContextEngineMessagesForPrecheck: AgentMessage[] | undefined;
+      let contextEngineAssemblySucceeded = false;
       abortSessionForYield = () => {
         yieldAbortSettled = Promise.resolve(activeSession.abort());
       };
@@ -1991,6 +1992,7 @@ export async function runEmbeddedAttempt(
                 `context engine: prepended system prompt addition (${assembled.systemPromptAddition.length} chars)`,
               );
             }
+            contextEngineAssemblySucceeded = true;
           } catch (assembleErr) {
             log.warn(
               `context engine assemble failed, using pipeline messages: ${String(assembleErr)}`,
@@ -2621,6 +2623,7 @@ export async function runEmbeddedAttempt(
           const preemptiveCompaction = shouldPreemptivelyCompactBeforePrompt({
             messages: activeSession.messages,
             unwindowedMessages: unwindowedContextEngineMessagesForPrecheck,
+            assemblyIsPromptAuthoritative: contextEngineAssemblySucceeded,
             systemPrompt: systemPromptText,
             prompt: effectivePrompt,
             contextTokenBudget,

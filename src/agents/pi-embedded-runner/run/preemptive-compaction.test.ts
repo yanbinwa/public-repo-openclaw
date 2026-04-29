@@ -108,6 +108,43 @@ describe("preemptive-compaction", () => {
     expect(result.estimatedPromptTokens).toBeGreaterThan(result.promptBudgetBeforeReserve);
   });
 
+  it("allows prompt when assemblyIsPromptAuthoritative is true and assembled messages fit under budget", () => {
+    // Regression test for issue #39: context-engine assembled prompts must
+    // not be bypassed by the overflow precheck using pre-assembly history.
+    const result = shouldPreemptivelyCompactBeforePrompt({
+      messages: [makeAssistantHistory("small assembled window")],
+      unwindowedMessages: [makeAssistantHistory(verboseHistory.repeat(4))],
+      assemblyIsPromptAuthoritative: true,
+      systemPrompt: "sys",
+      prompt: "hello",
+      contextTokenBudget: 10_000,
+      reserveTokens: 1_000,
+    });
+
+    // The assembled messages are small and fit easily — precheck should allow.
+    expect(result.shouldCompact).toBe(false);
+    expect(result.route).toBe("fits");
+    expect(result.estimatedPromptTokens).toBeLessThan(result.promptBudgetBeforeReserve);
+  });
+
+  it("still compacts when assemblyIsPromptAuthoritative is true but assembled messages themselves overflow", () => {
+    // Even with prompt-authoritative assembly, if the assembled view is still
+    // over budget, the precheck must still request compaction.
+    const result = shouldPreemptivelyCompactBeforePrompt({
+      messages: [makeAssistantHistory(verboseHistory.repeat(4))],
+      unwindowedMessages: [makeAssistantHistory(verboseHistory.repeat(8))],
+      assemblyIsPromptAuthoritative: true,
+      systemPrompt: verboseSystem,
+      prompt: verbosePrompt,
+      contextTokenBudget: 500,
+      reserveTokens: 50,
+    });
+
+    expect(result.shouldCompact).toBe(true);
+    expect(result.route).toBe("compact_only");
+    expect(result.estimatedPromptTokens).toBeGreaterThan(result.promptBudgetBeforeReserve);
+  });
+
   it("caps reserve tokens so small context models keep usable prompt budget", () => {
     const result = shouldPreemptivelyCompactBeforePrompt({
       messages: [makeAssistantHistory("short history")],
