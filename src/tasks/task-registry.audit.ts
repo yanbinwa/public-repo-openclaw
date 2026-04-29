@@ -7,6 +7,7 @@ import {
   type TaskAuditSummary,
 } from "./task-registry.audit.shared.js";
 import type { TaskRecord } from "./task-registry.types.js";
+import { classifyTaskFailure } from "./task-taxonomy.js";
 
 export type TaskAuditOptions = {
   now?: number;
@@ -33,12 +34,14 @@ function createFinding(params: {
   detail: string;
   ageMs?: number;
 }): TaskAuditFinding {
+  const failureClass = classifyTaskFailure(params.task);
   return {
     severity: params.severity,
     code: params.code,
     task: params.task,
     detail: params.detail,
     ...(typeof params.ageMs === "number" ? { ageMs: params.ageMs } : {}),
+    ...(failureClass ? { failureClass } : {}),
   };
 }
 
@@ -187,6 +190,9 @@ export function summarizeTaskAuditFindings(findings: Iterable<TaskAuditFinding>)
       summary.errors += 1;
     } else {
       summary.warnings += 1;
+    }
+    if (finding.failureClass) {
+      summary.classifiedFailures[finding.failureClass] += 1;
     }
   }
   return summary;

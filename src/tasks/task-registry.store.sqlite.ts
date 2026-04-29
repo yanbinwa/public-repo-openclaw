@@ -34,6 +34,7 @@ type TaskRegistryRow = {
   progress_summary: string | null;
   terminal_summary: string | null;
   terminal_outcome: TaskRecord["terminalOutcome"] | null;
+  failure_class: TaskRecord["failureClass"] | null;
 };
 
 type TaskDeliveryStateRow = {
@@ -126,6 +127,7 @@ function rowToTaskRecord(row: TaskRegistryRow): TaskRecord {
     ...(row.progress_summary ? { progressSummary: row.progress_summary } : {}),
     ...(row.terminal_summary ? { terminalSummary: row.terminal_summary } : {}),
     ...(row.terminal_outcome ? { terminalOutcome: row.terminal_outcome } : {}),
+    ...(row.failure_class ? { failureClass: row.failure_class } : {}),
   };
 }
 
@@ -167,6 +169,7 @@ function bindTaskRecordBase(record: TaskRecord) {
     progress_summary: record.progressSummary ?? null,
     terminal_summary: record.terminalSummary ?? null,
     terminal_outcome: record.terminalOutcome ?? null,
+    failure_class: record.failureClass ?? null,
   };
 }
 
@@ -207,7 +210,8 @@ function createStatements(db: DatabaseSync): TaskRegistryStatements {
         error,
         progress_summary,
         terminal_summary,
-        terminal_outcome
+        terminal_outcome,
+        failure_class
       FROM task_runs
       ORDER BY created_at ASC, task_id ASC
     `),
@@ -246,7 +250,8 @@ function createStatements(db: DatabaseSync): TaskRegistryStatements {
         error,
         progress_summary,
         terminal_summary,
-        terminal_outcome
+        terminal_outcome,
+        failure_class
       ) VALUES (
         @task_id,
         @runtime,
@@ -273,7 +278,8 @@ function createStatements(db: DatabaseSync): TaskRegistryStatements {
         @error,
         @progress_summary,
         @terminal_summary,
-        @terminal_outcome
+        @terminal_outcome,
+        @failure_class
       )
       ON CONFLICT(task_id) DO UPDATE SET
         runtime = excluded.runtime,
@@ -300,7 +306,8 @@ function createStatements(db: DatabaseSync): TaskRegistryStatements {
         error = excluded.error,
         progress_summary = excluded.progress_summary,
         terminal_summary = excluded.terminal_summary,
-        terminal_outcome = excluded.terminal_outcome
+        terminal_outcome = excluded.terminal_outcome,
+        failure_class = excluded.failure_class
     `),
     replaceDeliveryState: db.prepare(`
       INSERT OR REPLACE INTO task_delivery_state (
@@ -404,6 +411,9 @@ function ensureSchema(db: DatabaseSync) {
   }
   if (!hasTaskRunsColumn(db, "parent_flow_id")) {
     db.exec(`ALTER TABLE task_runs ADD COLUMN parent_flow_id TEXT;`);
+  }
+  if (!hasTaskRunsColumn(db, "failure_class")) {
+    db.exec(`ALTER TABLE task_runs ADD COLUMN failure_class TEXT;`);
   }
   db.exec(`
     CREATE TABLE IF NOT EXISTS task_delivery_state (

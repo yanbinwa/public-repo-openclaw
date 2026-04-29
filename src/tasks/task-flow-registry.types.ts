@@ -1,5 +1,6 @@
 import type { DeliveryContext } from "../utils/delivery-context.types.js";
 import type { TaskNotifyPolicy } from "./task-registry.types.js";
+import type { TaskBlockerClass } from "./task-taxonomy.js";
 
 export type JsonValue =
   | null
@@ -34,6 +35,7 @@ export type TaskFlowRecord = {
   currentStep?: string;
   blockedTaskId?: string;
   blockedSummary?: string;
+  blockerClass?: TaskBlockerClass;
   stateJson?: JsonValue;
   waitJson?: JsonValue;
   cancelRequestedAt?: number;

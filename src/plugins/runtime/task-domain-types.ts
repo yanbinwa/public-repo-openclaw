@@ -9,6 +9,7 @@ import type {
   TaskStatusCounts,
   TaskTerminalOutcome,
 } from "../../tasks/task-registry.types.js";
+import type { TaskBlockerClass, TaskFailureClass } from "../../tasks/task-taxonomy.js";
 import type { DeliveryContext } from "../../utils/delivery-context.types.js";
 
 export type TaskRunAggregateSummary = {
@@ -46,6 +47,7 @@ export type TaskRunView = {
   progressSummary?: string;
   terminalSummary?: string;
   terminalOutcome?: TaskTerminalOutcome;
+  failureClass?: TaskFailureClass;
 };
 
 export type TaskRunDetail = TaskRunView;
@@ -66,6 +68,7 @@ export type TaskFlowView = {
   goal: string;
   currentStep?: string;
   cancelRequestedAt?: number;
+  blockerClass?: TaskBlockerClass;
   createdAt: number;
   updatedAt: number;
   endedAt?: number;

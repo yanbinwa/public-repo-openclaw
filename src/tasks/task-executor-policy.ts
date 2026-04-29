@@ -1,5 +1,6 @@
 import type { TaskEventRecord, TaskRecord, TaskStatus } from "./task-registry.types.js";
 import { formatTaskStatusTitleText, sanitizeTaskStatusText } from "./task-status.js";
+import { classifyTaskFailure, failureClassLabel } from "./task-taxonomy.js";
 
 export function isTerminalTaskStatus(status: TaskStatus): boolean {
   return (
@@ -55,11 +56,16 @@ export function formatTaskTerminalMessage(task: TaskRecord): string {
   }
   const error = sanitizeTaskStatusText(task.error, { errorContext: true });
   const fallbackSummary = sanitizeTaskStatusText(task.terminalSummary, { errorContext: true });
+  const cls = classifyTaskFailure(task);
+  const classLabel = cls ? failureClassLabel(cls) : undefined;
+  const failedPrefix = classLabel
+    ? `Background task failed (${classLabel})`
+    : "Background task failed";
   return error
-    ? `Background task failed: ${title}${runLabel}. ${error}`
+    ? `${failedPrefix}: ${title}${runLabel}. ${error}`
     : fallbackSummary
-      ? `Background task failed: ${title}${runLabel}. ${fallbackSummary}`
-      : `Background task failed: ${title}${runLabel}.`;
+      ? `${failedPrefix}: ${title}${runLabel}. ${fallbackSummary}`
+      : `${failedPrefix}: ${title}${runLabel}.`;
 }
 
 export function formatTaskBlockedFollowupMessage(task: TaskRecord): string | null {
