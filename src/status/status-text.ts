@@ -24,6 +24,7 @@ import {
   resolveUsageProviderId,
 } from "../infra/provider-usage.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
+import { buildTaskOpsSummary, formatTaskOpsSummary } from "../tasks/task-ops-summary.js";
 import {
   listTasksForAgentIdForStatus,
   listTasksForSessionKeyForStatus,
@@ -94,9 +95,8 @@ function formatSessionTaskLine(sessionKey: string): string | undefined {
       : snapshot.recentFailureCount > 0
         ? `${snapshot.recentFailureCount} recent failure${snapshot.recentFailureCount === 1 ? "" : "s"}`
         : "recently finished";
-  const title = formatTaskStatusTitle(task);
-  const detail = formatTaskStatusDetail(task);
-  const parts = [headline, task.runtime, title, detail].filter(Boolean);
+  const opsSummary = formatTaskOpsSummary(buildTaskOpsSummary(task));
+  const parts = [headline, task.runtime, opsSummary].filter(Boolean);
   return parts.length ? `📌 Tasks: ${parts.join(" · ")}` : undefined;
 }
 

@@ -2,6 +2,7 @@ import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { logVerbose } from "../../globals.js";
 import { formatDurationCompact } from "../../infra/format-time/format-duration.ts";
 import { formatTimeAgo } from "../../infra/format-time/format-relative.ts";
+import { buildTaskOpsSummary, formatTaskOpsSummary } from "../../tasks/task-ops-summary.js";
 import type { TaskRecord } from "../../tasks/task-registry.types.js";
 import {
   listTasksForAgentIdForStatus,
@@ -70,11 +71,13 @@ function formatVisibleTask(task: TaskRecord, index: number): string {
   const status = task.status.replaceAll("_", " ");
   const timing = formatTaskTiming(task);
   const detail = formatTaskDetail(task);
+  const opsSummary = formatTaskOpsSummary(buildTaskOpsSummary(task));
   const meta = [TASK_RUNTIME_LABELS[task.runtime], status, timing].filter(Boolean).join(" · ");
   const lines = [`${index + 1}. ${TASK_STATUS_ICONS[task.status]} ${title}`, `   ${meta}`];
   if (detail) {
     lines.push(`   ${detail}`);
   }
+  lines.push(`   ${opsSummary}`);
   return lines.join("\n");
 }
 
