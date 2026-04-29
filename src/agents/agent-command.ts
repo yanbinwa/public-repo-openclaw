@@ -1123,6 +1123,10 @@ async function agentCommandInternal(
     // Update token+model fields in the session store.
     if (sessionStore && sessionKey) {
       const { updateSessionStoreAfterAgentRun } = await loadSessionStoreRuntime();
+      const isBackgroundRun =
+        opts.bootstrapContextRunKind === "cron" ||
+        opts.bootstrapContextRunKind === "heartbeat" ||
+        !!opts.internalEvents?.length;
       await updateSessionStoreAfterAgentRun({
         cfg,
         contextTokensOverride: agentCfg?.contextTokens,
@@ -1135,10 +1139,8 @@ async function agentCommandInternal(
         fallbackProvider,
         fallbackModel,
         result,
-        touchInteraction:
-          opts.bootstrapContextRunKind !== "cron" &&
-          opts.bootstrapContextRunKind !== "heartbeat" &&
-          !opts.internalEvents?.length,
+        touchInteraction: !isBackgroundRun,
+        skipRuntimeModelPersist: isBackgroundRun,
       });
       sessionEntry = sessionStore[sessionKey] ?? sessionEntry;
     }

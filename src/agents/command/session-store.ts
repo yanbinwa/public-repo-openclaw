@@ -50,6 +50,7 @@ export async function updateSessionStoreAfterAgentRun(params: {
   fallbackModel?: string;
   result: RunResult;
   touchInteraction?: boolean;
+  skipRuntimeModelPersist?: boolean;
 }) {
   const {
     cfg,
@@ -105,10 +106,14 @@ export async function updateSessionStoreAfterAgentRun(params: {
     lastInteractionAt: touchInteraction ? now : entry.lastInteractionAt,
     contextTokens,
   };
-  setSessionRuntimeModel(next, {
-    provider: providerUsed,
-    model: modelUsed,
-  });
+  // Skip runtime model persistence for heartbeat/cron runs so that background
+  // models do not leak into the user-facing session status. (Fixes #45.)
+  if (!params.skipRuntimeModelPersist) {
+    setSessionRuntimeModel(next, {
+      provider: providerUsed,
+      model: modelUsed,
+    });
+  }
   if (agentHarnessId) {
     next.agentHarnessId = agentHarnessId;
   } else if (result.meta.executionTrace?.runner === "cli") {
