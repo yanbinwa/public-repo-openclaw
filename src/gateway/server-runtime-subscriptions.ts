@@ -1,5 +1,6 @@
 import { onAgentEvent } from "../infra/agent-events.js";
 import { onHeartbeatEvent } from "../infra/heartbeat-events.js";
+import { onNotificationEvent } from "../infra/notifications.js";
 import { onSessionLifecycleEvent } from "../sessions/session-lifecycle-events.js";
 import { onSessionTranscriptUpdate } from "../sessions/transcript-events.js";
 import type { ChatAbortControllerEntry } from "./chat-abort.js";
@@ -97,10 +98,15 @@ export function startGatewayEventSubscriptions(params: {
     void getLifecycleEventHandler().then((handler) => handler(evt));
   });
 
+  const notificationUnsub = onNotificationEvent((evt) => {
+    params.broadcast("notification", evt, { dropIfSlow: true });
+  });
+
   return {
     agentUnsub,
     heartbeatUnsub,
     transcriptUnsub,
     lifecycleUnsub,
+    notificationUnsub,
   };
 }
