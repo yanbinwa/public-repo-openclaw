@@ -1,5 +1,5 @@
 import { listChannelPlugins } from "../channels/plugins/index.js";
-import { GATEWAY_EVENT_UPDATE_AVAILABLE } from "./events.js";
+import { GATEWAY_EVENT_NOTIFICATION, GATEWAY_EVENT_UPDATE_AVAILABLE } from "./events.js";
 
 const BASE_METHODS = [
   "health",
@@ -148,6 +148,10 @@ const BASE_METHODS = [
   "chat.history",
   "chat.abort",
   "chat.send",
+  // Notification preferences and dispatch
+  "notifications.preferences.get",
+  "notifications.preferences.set",
+  "notifications.send",
 ];
 
 export function listGatewayMethods(): string[] {
@@ -181,4 +185,5 @@ export const GATEWAY_EVENTS = [
   "plugin.approval.requested",
   "plugin.approval.resolved",
   GATEWAY_EVENT_UPDATE_AVAILABLE,
+  GATEWAY_EVENT_NOTIFICATION,
 ];

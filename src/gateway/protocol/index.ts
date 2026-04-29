@@ -227,6 +227,12 @@ import {
   WebPushUnsubscribeParamsSchema,
   type WebPushTestParams,
   WebPushTestParamsSchema,
+  type NotificationPreferencesGetParams,
+  NotificationPreferencesGetParamsSchema,
+  type NotificationPreferencesSetParams,
+  NotificationPreferencesSetParamsSchema,
+  type NotificationSendParams,
+  NotificationSendParamsSchema,
   type PresenceEntry,
   PresenceEntrySchema,
   ProtocolSchemas,
@@ -415,6 +421,13 @@ export const validateWebPushUnsubscribeParams = ajv.compile<WebPushUnsubscribePa
   WebPushUnsubscribeParamsSchema,
 );
 export const validateWebPushTestParams = ajv.compile<WebPushTestParams>(WebPushTestParamsSchema);
+export const validateNotificationPreferencesGetParams =
+  ajv.compile<NotificationPreferencesGetParams>(NotificationPreferencesGetParamsSchema);
+export const validateNotificationPreferencesSetParams =
+  ajv.compile<NotificationPreferencesSetParams>(NotificationPreferencesSetParamsSchema);
+export const validateNotificationSendParams = ajv.compile<NotificationSendParams>(
+  NotificationSendParamsSchema,
+);
 export const validateSecretsResolveParams = ajv.compile<SecretsResolveParams>(
   SecretsResolveParamsSchema,
 );
