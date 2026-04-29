@@ -415,6 +415,15 @@ export async function runPreflightCompactionIfNeeded(params: {
     return entry ?? params.sessionEntry;
   }
 
+  // Reset commands (/new, /reset) clear the session entirely — compaction is
+  // unnecessary and would hold a WRITE lock long enough to trip Discord's
+  // InteractionEventListener 30 s deadline.  Bypass using the same pattern
+  // already established in commands-reset.ts.
+  const isResetCommand = /^\/(new|reset)(?:\s|$)/.test(params.followupRun.prompt ?? "");
+  if (isResetCommand) {
+    return entry ?? params.sessionEntry;
+  }
+
   const contextWindowTokens = resolveMemoryFlushContextWindowTokens({
     cfg: params.cfg,
     provider: params.followupRun.run.provider,
