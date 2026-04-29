@@ -345,6 +345,78 @@ describe("resolveSubagentCompletionOrigin", () => {
       to: "channel:parent-main",
     });
   });
+
+  it("never uses child agent accountId for cross-app Feishu delivery (issue #106)", async () => {
+    // Simulate the Feishu cross-app scenario: parent uses "default" app,
+    // child agent uses "QMT-assistant" app. The child binding shares the same
+    // conversationId as the requester, which would cause a requester-match
+    // if childSessionKey were used for resolution.
+    registerSessionBindingAdapter({
+      channel: "feishu",
+      accountId: "QMT-assistant",
+      listBySession: (targetSessionKey: string) => {
+        if (targetSessionKey === "agent:qmt-assistant:subagent:task1") {
+          return [
+            {
+              bindingId: "feishu:QMT-assistant:oc_parent_chat",
+              targetSessionKey,
+              targetKind: "subagent",
+              conversation: {
+                channel: "feishu",
+                accountId: "QMT-assistant",
+                conversationId: "oc_parent_chat",
+              },
+              status: "active",
+              boundAt: 1,
+            },
+          ];
+        }
+        return [];
+      },
+      resolveByConversation: () => null,
+    });
+    registerSessionBindingAdapter({
+      channel: "feishu",
+      accountId: "default",
+      listBySession: (targetSessionKey: string) => {
+        if (targetSessionKey === "agent:main:main") {
+          return [
+            {
+              bindingId: "feishu:default:oc_parent_chat",
+              targetSessionKey,
+              targetKind: "session",
+              conversation: {
+                channel: "feishu",
+                accountId: "default",
+                conversationId: "oc_parent_chat",
+              },
+              status: "active",
+              boundAt: 1,
+            },
+          ];
+        }
+        return [];
+      },
+      resolveByConversation: () => null,
+    });
+
+    const origin = await resolveSubagentCompletionOrigin({
+      childSessionKey: "agent:qmt-assistant:subagent:task1",
+      requesterSessionKey: "agent:main:main",
+      requesterOrigin: {
+        channel: "feishu",
+        accountId: "default",
+        to: "oc_parent_chat",
+      },
+      spawnMode: "session",
+      expectsCompletionMessage: true,
+    });
+
+    // Must use the parent's "default" accountId, NOT the child's "QMT-assistant"
+    expect(origin).toBeDefined();
+    expect(origin!.accountId).toBe("default");
+    expect(origin!.channel).toBe("feishu");
+  });
 });
 
 describe("deliverSubagentAnnouncement queued delivery", () => {
