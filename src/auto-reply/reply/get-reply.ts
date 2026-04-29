@@ -363,7 +363,11 @@ export async function getReplyFromConfig(
       sessionCtx.ParentSessionKey,
     defaultProvider,
   });
-  if (storedModelOverride?.model && !hasResolvedHeartbeatModelOverride) {
+  // For heartbeat runs, always use fresh config defaults (either explicit heartbeat.model
+  // or agents.defaults.model.primary). Never inherit the stale stored session model override
+  // from sessions.json, which was pinned at session creation time and does not reflect
+  // openclaw.json edits across restarts. (Fixes #45, follow-up to #51677.)
+  if (storedModelOverride?.model && !hasResolvedHeartbeatModelOverride && !opts?.isHeartbeat) {
     provider = storedModelOverride.provider ?? defaultProvider;
     model = storedModelOverride.model;
   }

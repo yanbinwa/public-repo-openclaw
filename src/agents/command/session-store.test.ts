@@ -877,6 +877,123 @@ describe("updateSessionStoreAfterAgentRun", () => {
       expect(sessionStore[sessionKey]?.lastInteractionAt).toBeGreaterThan(lastInteractionAt);
     });
   });
+
+  it("does not overwrite session model when skipRuntimeModelPersist is true (fixes #45)", async () => {
+    await withTempSessionStore(async ({ storePath }) => {
+      const cfg = {} as OpenClawConfig;
+      const sessionKey = "agent:main:explicit:test-heartbeat-model-leak";
+      const sessionId = "test-heartbeat-model-leak-session";
+      const sessionStore: Record<string, SessionEntry> = {
+        [sessionKey]: {
+          sessionId,
+          updatedAt: Date.now() - 10_000,
+          modelProvider: "openai-codex",
+          model: "gpt-5.5",
+        },
+      };
+      await fs.writeFile(storePath, JSON.stringify(sessionStore, null, 2));
+
+      // Simulate a heartbeat run that uses a different model
+      await updateSessionStoreAfterAgentRun({
+        cfg,
+        sessionId,
+        sessionKey,
+        storePath,
+        sessionStore,
+        defaultProvider: "xai",
+        defaultModel: "grok-4-1-fast",
+        result: {
+          meta: {
+            durationMs: 1,
+            agentMeta: {
+              sessionId,
+              provider: "xai",
+              model: "grok-4-1-fast",
+            },
+          },
+        },
+        touchInteraction: false,
+        skipRuntimeModelPersist: true,
+      });
+
+      // AC-1: model/modelProvider must remain unchanged
+      expect(sessionStore[sessionKey]?.model).toBe("gpt-5.5");
+      expect(sessionStore[sessionKey]?.modelProvider).toBe("openai-codex");
+
+      // AC-4: on-disk persistence also reflects the unchanged model
+      const persisted = loadSessionStore(storePath);
+      expect(persisted[sessionKey]?.model).toBe("gpt-5.5");
+      expect(persisted[sessionKey]?.modelProvider).toBe("openai-codex");
+    });
+  });
+
+  it("still updates token fields when skipRuntimeModelPersist is true (fixes #45)", async () => {
+    await withTempSessionStore(async ({ storePath }) => {
+      const cfg = {
+        models: {
+          providers: {
+            xai: {
+              models: [
+                {
+                  id: "grok-4-1-fast",
+                  cost: {
+                    input: 5,
+                    output: 15,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      } as unknown as OpenClawConfig;
+      const sessionKey = "agent:main:explicit:test-heartbeat-tokens";
+      const sessionId = "test-heartbeat-tokens-session";
+      const sessionStore: Record<string, SessionEntry> = {
+        [sessionKey]: {
+          sessionId,
+          updatedAt: Date.now() - 10_000,
+          modelProvider: "openai-codex",
+          model: "gpt-5.5",
+        },
+      };
+      await fs.writeFile(storePath, JSON.stringify(sessionStore, null, 2));
+
+      // Simulate heartbeat run with usage data
+      await updateSessionStoreAfterAgentRun({
+        cfg,
+        sessionId,
+        sessionKey,
+        storePath,
+        sessionStore,
+        defaultProvider: "xai",
+        defaultModel: "grok-4-1-fast",
+        result: {
+          meta: {
+            durationMs: 1,
+            agentMeta: {
+              sessionId,
+              provider: "xai",
+              model: "grok-4-1-fast",
+              usage: {
+                input: 5000,
+                output: 1000,
+              },
+            },
+          },
+        },
+        touchInteraction: false,
+        skipRuntimeModelPersist: true,
+      });
+
+      // AC-3: token/cost fields ARE updated even with skipRuntimeModelPersist
+      expect(sessionStore[sessionKey]?.inputTokens).toBe(5000);
+      expect(sessionStore[sessionKey]?.outputTokens).toBe(1000);
+
+      // But model fields remain unchanged
+      expect(sessionStore[sessionKey]?.model).toBe("gpt-5.5");
+      expect(sessionStore[sessionKey]?.modelProvider).toBe("openai-codex");
+    });
+  });
 });
 
 describe("clearCliSessionInStore", () => {
