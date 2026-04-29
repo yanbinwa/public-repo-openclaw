@@ -601,10 +601,10 @@ export class AcpSessionManager {
           .filter(Boolean) as string[],
       );
       if (advertisedKeys.size > 0 && !advertisedKeys.has(key)) {
-        throw new AcpRuntimeError(
-          "ACP_BACKEND_UNSUPPORTED_CONTROL",
-          `ACP backend "${handle.backend || meta.backend}" does not accept config key "${key}".`,
+        logVerbose(
+          `acp-manager: skipping unsupported config key "${key}" for ACP backend "${handle.backend || meta.backend}". Advertised keys: ${[...advertisedKeys].join(", ")}.`,
         );
+        return resolveRuntimeOptionsFromMeta(meta);
       }
 
       await withAcpRuntimeErrorBoundary({
