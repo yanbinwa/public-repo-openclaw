@@ -644,7 +644,11 @@ function splitPreservedRecentTurns(params: {
   const summarizableMessages = params.messages.filter((_, idx) => !preservedIndexSet.has(idx));
   // Preserving recent assistant turns can orphan downstream toolResult messages.
   // Repair pairings here so compaction summarization doesn't trip strict providers.
-  const repairedSummarizableMessages = repairToolUseResultPairing(summarizableMessages).messages;
+  // Use "drop-tool-call" policy so orphan tool calls (whose results moved to the
+  // preserved portion) are stripped instead of getting synthetic error results.
+  const repairedSummarizableMessages = repairToolUseResultPairing(summarizableMessages, {
+    missingToolResultPolicy: "drop-tool-call",
+  }).messages;
   const preservedMessages = params.messages
     .filter((_, idx) => preservedIndexSet.has(idx))
     .filter((msg) => {

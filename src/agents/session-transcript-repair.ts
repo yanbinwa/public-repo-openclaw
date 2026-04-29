@@ -260,9 +260,12 @@ export type ToolCallInputRepairOptions = {
 
 export type ErroredAssistantResultPolicy = "preserve" | "drop";
 
+export type MissingToolResultPolicy = "synthesize-error" | "drop-tool-call";
+
 export type ToolUseResultPairingOptions = {
   erroredAssistantResultPolicy?: ErroredAssistantResultPolicy;
   missingToolResultText?: string;
+  missingToolResultPolicy?: MissingToolResultPolicy;
 };
 
 export function stripToolResultDetails(messages: AgentMessage[]): AgentMessage[] {
@@ -444,6 +447,10 @@ function shouldDropErroredAssistantResults(options?: ToolUseResultPairingOptions
   return options?.erroredAssistantResultPolicy === "drop";
 }
 
+function shouldDropOrphanToolCalls(options?: ToolUseResultPairingOptions): boolean {
+  return options?.missingToolResultPolicy === "drop-tool-call";
+}
+
 export function repairToolUseResultPairing(
   messages: AgentMessage[],
   options?: ToolUseResultPairingOptions,
@@ -581,28 +588,99 @@ export function repairToolUseResultPairing(
       continue;
     }
 
-    out.push(msg);
+    if (shouldDropOrphanToolCalls(options)) {
+      // "drop-tool-call" policy: strip orphan tool call blocks from assistant
+      // content instead of inserting synthetic error results. This is used by
+      // compaction callers where missing results are expected (compacted away)
+      // rather than indicative of transcript corruption.
+      const orphanCallIds = new Set<string>();
+      const survivingCallIds = new Set<string>();
+      for (const call of toolCalls) {
+        if (spanResultsById.has(call.id)) {
+          survivingCallIds.add(call.id);
+        } else {
+          orphanCallIds.add(call.id);
+        }
+      }
 
-    if (spanResultsById.size > 0 && remainder.length > 0) {
-      // Preserve real late-arriving results before synthesizing missing siblings;
-      // otherwise parallel tool replay can replace useful output with repair noise.
-      moved = true;
-      changed = true;
-    }
-
-    for (const call of toolCalls) {
-      const existing = spanResultsById.get(call.id);
-      if (existing) {
-        pushToolResult(existing);
-      } else {
-        const missing = makeMissingToolResult({
-          toolCallId: call.id,
-          toolName: call.name,
-          text: options?.missingToolResultText,
-        });
-        added.push(missing);
+      if (orphanCallIds.size > 0) {
         changed = true;
-        pushToolResult(missing);
+      }
+
+      if (survivingCallIds.size === 0) {
+        // All tool calls are orphaned. Check if there is non-tool-call content
+        // (text blocks, thinking blocks, etc.) worth preserving.
+        if (Array.isArray(assistant.content)) {
+          const rawContent = assistant.content as unknown[];
+          const nonToolCallContent = rawContent.filter((block) => !isRawToolCallBlock(block));
+          if (nonToolCallContent.length > 0) {
+            // Preserve the assistant message with only the non-tool-call content.
+            out.push({ ...msg, content: nonToolCallContent } as AgentMessage);
+          }
+          // else: no remaining content — drop the entire assistant message.
+        }
+        // If content is not an array, drop the message (malformed).
+      } else {
+        // Some tool calls survive — strip only the orphaned tool call blocks
+        // from the assistant content.
+        if (orphanCallIds.size > 0 && Array.isArray(assistant.content)) {
+          const rawContent = assistant.content as unknown[];
+          const filteredContent = rawContent.filter((block) => {
+            if (!isRawToolCallBlock(block)) {
+              return true;
+            }
+            const blockId =
+              typeof (block as RawToolCallBlock).id === "string"
+                ? ((block as RawToolCallBlock).id as string).trim()
+                : "";
+            return !orphanCallIds.has(blockId);
+          });
+          out.push({ ...msg, content: filteredContent } as AgentMessage);
+        } else {
+          out.push(msg);
+        }
+        // Emit results for surviving tool calls only.
+        for (const call of toolCalls) {
+          if (!survivingCallIds.has(call.id)) {
+            continue;
+          }
+          const existing = spanResultsById.get(call.id);
+          if (existing) {
+            pushToolResult(existing);
+          }
+        }
+      }
+
+      if (spanResultsById.size > 0 && remainder.length > 0) {
+        moved = true;
+        changed = true;
+      }
+    } else {
+      // Default "synthesize-error" policy: insert synthetic error results for
+      // any tool call without a matching result.
+      out.push(msg);
+
+      if (spanResultsById.size > 0 && remainder.length > 0) {
+        // Preserve real late-arriving results before synthesizing missing siblings;
+        // otherwise parallel tool replay can replace useful output with repair noise.
+        moved = true;
+        changed = true;
+      }
+
+      for (const call of toolCalls) {
+        const existing = spanResultsById.get(call.id);
+        if (existing) {
+          pushToolResult(existing);
+        } else {
+          const missing = makeMissingToolResult({
+            toolCallId: call.id,
+            toolName: call.name,
+            text: options?.missingToolResultText,
+          });
+          added.push(missing);
+          changed = true;
+          pushToolResult(missing);
+        }
       }
     }
 
