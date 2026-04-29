@@ -262,3 +262,97 @@ describe("WhatsApp dmPolicy precedence", () => {
     expect(result.isSelfChat).toBe(true);
   });
 });
+
+describe("dmPolicy allowlist survives monitor cfg override (#44)", () => {
+  it("blocks non-allowed sender when dmPolicy is flattened into channel config", async () => {
+    // Simulates the cfg object built by monitorWebChannel (auto-reply/monitor.ts)
+    // where account-level fields are spread directly into channels.whatsapp.
+    // Before the fix, dmPolicy was missing from this override, causing it to
+    // default to "pairing" and allowing queued messages through after reconnection.
+    const cfg = {
+      channels: {
+        whatsapp: {
+          dmPolicy: "allowlist",
+          allowFrom: ["+15559999999"],
+        },
+      },
+    };
+    setAccessControlTestConfig(cfg);
+
+    const result = await checkInboundAccessControl({
+      cfg: getAccessControlTestConfig() as never,
+      accountId: "default",
+      from: "+15550001111",
+      selfE164: "+15550009999",
+      senderE164: "+15550001111",
+      group: false,
+      pushName: "Stranger",
+      isFromMe: false,
+      sock: { sendMessage: sendMessageMock },
+      remoteJid: "15550001111@s.whatsapp.net",
+    });
+
+    expect(result.allowed).toBe(false);
+    // In allowlist mode, no pairing reply should be sent
+    expect(upsertPairingRequestMock).not.toHaveBeenCalled();
+    expect(sendMessageMock).not.toHaveBeenCalled();
+  });
+
+  it("allows listed sender when dmPolicy=allowlist is in channel config", async () => {
+    const cfg = {
+      channels: {
+        whatsapp: {
+          dmPolicy: "allowlist",
+          allowFrom: ["+15550001111"],
+        },
+      },
+    };
+    setAccessControlTestConfig(cfg);
+
+    const result = await checkInboundAccessControl({
+      cfg: getAccessControlTestConfig() as never,
+      accountId: "default",
+      from: "+15550001111",
+      selfE164: "+15550009999",
+      senderE164: "+15550001111",
+      group: false,
+      pushName: "Allowed",
+      isFromMe: false,
+      sock: { sendMessage: sendMessageMock },
+      remoteJid: "15550001111@s.whatsapp.net",
+    });
+
+    expect(result.allowed).toBe(true);
+  });
+
+  it("does not read pairing store when dmPolicy=allowlist after reconnect", async () => {
+    // After reconnection, the monitor rebuilds the cfg with dmPolicy from account.
+    // Pairing store must NOT be consulted in allowlist mode.
+    const cfg = {
+      channels: {
+        whatsapp: {
+          dmPolicy: "allowlist",
+          allowFrom: ["+15559999999"],
+        },
+      },
+    };
+    setAccessControlTestConfig(cfg);
+    readAllowFromStoreMock.mockResolvedValue(["+15550001111"]);
+
+    const result = await checkInboundAccessControl({
+      cfg: getAccessControlTestConfig() as never,
+      accountId: "default",
+      from: "+15550001111",
+      selfE164: "+15550009999",
+      senderE164: "+15550001111",
+      group: false,
+      pushName: "PairedButNotAllowed",
+      isFromMe: false,
+      sock: { sendMessage: sendMessageMock },
+      remoteJid: "15550001111@s.whatsapp.net",
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(readAllowFromStoreMock).not.toHaveBeenCalled();
+  });
+});
