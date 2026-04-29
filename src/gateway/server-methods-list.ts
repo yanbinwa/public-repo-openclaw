@@ -148,6 +148,10 @@ const BASE_METHODS = [
   "chat.history",
   "chat.abort",
   "chat.send",
+  // Notification methods
+  "notification.list",
+  "notification.subscribe",
+  "notification.preferences",
 ];
 
 export function listGatewayMethods(): string[] {
@@ -180,5 +184,6 @@ export const GATEWAY_EVENTS = [
   "exec.approval.resolved",
   "plugin.approval.requested",
   "plugin.approval.resolved",
+  "notification",
   GATEWAY_EVENT_UPDATE_AVAILABLE,
 ];
