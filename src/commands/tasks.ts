@@ -16,6 +16,7 @@ import {
   runTaskFlowRegistryMaintenance,
 } from "../tasks/task-flow-registry.maintenance.js";
 import type { TaskFlowRecord } from "../tasks/task-flow-registry.types.js";
+import { buildTaskOpsSummary, formatTaskOpsSummary } from "../tasks/task-ops-summary.js";
 import {
   listTaskAuditFindings,
   summarizeTaskAuditFindings,
@@ -362,6 +363,7 @@ export async function tasksShowCommand(
     ...(task.error ? [`error: ${task.error}`] : []),
     ...(task.progressSummary ? [`progressSummary: ${task.progressSummary}`] : []),
     ...(task.terminalSummary ? [`terminalSummary: ${task.terminalSummary}`] : []),
+    `opsSummary: ${formatTaskOpsSummary(buildTaskOpsSummary(task))}`,
   ];
   for (const line of lines) {
     runtime.log(line);
