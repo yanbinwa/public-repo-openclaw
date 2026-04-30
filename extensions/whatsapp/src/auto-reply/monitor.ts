@@ -168,6 +168,7 @@ export async function monitorWebChannel(
         ...baseCfg.channels?.whatsapp,
         ackReaction: account.ackReaction,
         messagePrefix: account.messagePrefix,
+        dmPolicy: account.dmPolicy,
         allowFrom: account.allowFrom,
         groupAllowFrom: account.groupAllowFrom,
         groupPolicy: account.groupPolicy,
