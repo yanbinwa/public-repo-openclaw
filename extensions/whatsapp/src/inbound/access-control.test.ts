@@ -262,3 +262,95 @@ describe("WhatsApp dmPolicy precedence", () => {
     expect(result.isSelfChat).toBe(true);
   });
 });
+
+describe("dmPolicy allowlist enforcement after monitor cfg flattening (#44)", () => {
+  it("blocks non-allowed sender when dmPolicy=allowlist is flattened into channel config", async () => {
+    // Simulates the cfg override that monitorWebChannel builds after reconnection.
+    // Before the fix, dmPolicy was omitted from the override, defaulting to "pairing".
+    const cfg = {
+      channels: {
+        whatsapp: {
+          dmPolicy: "allowlist",
+          allowFrom: ["+447597219254"],
+        },
+      },
+    };
+    setAccessControlTestConfig(cfg);
+
+    const result = await checkInboundAccessControl({
+      cfg: getAccessControlTestConfig() as never,
+      accountId: "default",
+      from: "+447767057318",
+      selfE164: "+447597219254",
+      senderE164: "+447767057318",
+      group: false,
+      pushName: "Robert Goldfinch",
+      isFromMe: false,
+      sock: { sendMessage: sendMessageMock },
+      remoteJid: "447767057318@s.whatsapp.net",
+    });
+
+    expectSilentlyBlocked(result);
+  });
+
+  it("allows sender in allowFrom when dmPolicy=allowlist is flattened", async () => {
+    const cfg = {
+      channels: {
+        whatsapp: {
+          dmPolicy: "allowlist",
+          allowFrom: ["+447597219254"],
+        },
+      },
+    };
+    setAccessControlTestConfig(cfg);
+
+    const result = await checkInboundAccessControl({
+      cfg: getAccessControlTestConfig() as never,
+      accountId: "default",
+      from: "+447597219254",
+      selfE164: "+447597219254",
+      senderE164: "+447597219254",
+      group: false,
+      pushName: "Owner",
+      isFromMe: false,
+      sock: { sendMessage: sendMessageMock },
+      remoteJid: "447597219254@s.whatsapp.net",
+    });
+
+    expect(result.allowed).toBe(true);
+  });
+
+  it("blocks non-allowed sender with account-level dmPolicy=allowlist flattened into channel", async () => {
+    // Simulates account override scenario where dmPolicy comes from account level
+    const cfg = {
+      channels: {
+        whatsapp: {
+          dmPolicy: "allowlist",
+          allowFrom: ["+15559999999"],
+          accounts: {
+            work: {
+              dmPolicy: "allowlist",
+              allowFrom: ["+15559999999"],
+            },
+          },
+        },
+      },
+    };
+    setAccessControlTestConfig(cfg);
+
+    const result = await checkInboundAccessControl({
+      cfg: getAccessControlTestConfig() as never,
+      accountId: "work",
+      from: "+15550001111",
+      selfE164: "+15550009999",
+      senderE164: "+15550001111",
+      group: false,
+      pushName: "Stranger",
+      isFromMe: false,
+      sock: { sendMessage: sendMessageMock },
+      remoteJid: "15550001111@s.whatsapp.net",
+    });
+
+    expectSilentlyBlocked(result);
+  });
+});
