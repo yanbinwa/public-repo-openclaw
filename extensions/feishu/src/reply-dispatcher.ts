@@ -384,6 +384,28 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
             streamingClosedForReply = true;
           }
         }
+
+        // Streaming card element updates (PUT) do not trigger Feishu push
+        // notifications — only im.message.create / reply does.  When the
+        // card contained @mentions, send a lightweight follow-up text
+        // message so mentioned users receive a notification.  (#73469)
+        if (mentionTargets?.length) {
+          try {
+            await sendMessageFeishu({
+              cfg,
+              to: chatId,
+              text: "☝️",
+              replyToMessageId: sendReplyToMessageId,
+              replyInThread: effectiveReplyInThread,
+              mentions: mentionTargets,
+              accountId,
+            });
+          } catch (mentionNotifyError) {
+            params.runtime.error?.(
+              `feishu[${account.accountId}]: mention follow-up notification failed: ${String(mentionNotifyError)}`,
+            );
+          }
+        }
       }
     } finally {
       streaming = null;
