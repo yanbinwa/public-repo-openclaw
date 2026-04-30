@@ -286,16 +286,16 @@ describe("doctor state integrity oauth dir checks", () => {
     const sessionsDir = resolveSessionTranscriptsDirForAgent("main", process.env, () => tempHome);
     fs.writeFileSync(path.join(sessionsDir, "orphan-session.jsonl"), '{"type":"session"}\n');
     const confirmRuntimeRepair = vi.fn(async (params: { message: string }) =>
-      params.message.includes("This only renames them to *.deleted.<timestamp>."),
+      params.message.includes("hidden from session discovery"),
     );
     await noteStateIntegrity(cfg, { confirmRuntimeRepair, note: noteMock });
     expect(stateIntegrityText()).toContain(
-      "These .jsonl files are no longer referenced by sessions.json",
+      "appear to be empty or stub transcripts not referenced by sessions.json",
     );
     expect(stateIntegrityText()).toContain("Examples: orphan-session.jsonl");
     expect(confirmRuntimeRepair).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("This only renames them to *.deleted.<timestamp>."),
+        message: expect.stringContaining("hidden from session discovery"),
         requiresInteractiveConfirmation: true,
       }),
     );
@@ -356,13 +356,13 @@ describe("doctor state integrity oauth dir checks", () => {
         });
 
         const confirmRuntimeRepair = vi.fn(async (params: { message: string }) =>
-          params.message.includes("This only renames them to *.deleted.<timestamp>."),
+          params.message.includes("hidden from session discovery"),
         );
         await noteStateIntegrity(cfg, { confirmRuntimeRepair, note: noteMock });
 
         expect(fs.existsSync(transcriptPath)).toBe(true);
         expect(fs.readdirSync(sessionsDir).some((name) => name.includes(".deleted."))).toBe(false);
-        expect(stateIntegrityText()).not.toContain("These .jsonl files are no longer referenced");
+        expect(stateIntegrityText()).not.toContain("appear to be empty or stub transcripts");
       } finally {
         fs.rmSync(symlinkHome, { force: true, recursive: true });
       }
@@ -373,7 +373,7 @@ describe("doctor state integrity oauth dir checks", () => {
     const confirmRuntimeRepair = await runOrphanTranscriptCheckWithQmdSessions(true, tempHome);
 
     expect(stateIntegrityText()).not.toContain(
-      "These .jsonl files are no longer referenced by sessions.json",
+      "appear to be empty or stub transcripts not referenced by sessions.json",
     );
     expect(confirmRuntimeRepair).not.toHaveBeenCalled();
   });
@@ -382,9 +382,57 @@ describe("doctor state integrity oauth dir checks", () => {
     const confirmRuntimeRepair = await runOrphanTranscriptCheckWithQmdSessions(false, tempHome);
 
     expect(stateIntegrityText()).toContain(
-      "These .jsonl files are no longer referenced by sessions.json",
+      "appear to be empty or stub transcripts not referenced by sessions.json",
     );
     expect(confirmRuntimeRepair).toHaveBeenCalled();
+  });
+
+  it("does not flag multi-line historical transcripts as orphans", async () => {
+    const cfg: OpenClawConfig = {};
+    setupSessionState(cfg, process.env, process.env.HOME ?? "");
+    const sessionsDir = resolveSessionTranscriptsDirForAgent("main", process.env, () => tempHome);
+    // Write a multi-line transcript simulating real chat history — not referenced in sessions.json
+    // but should NOT be flagged as orphan because it contains substantial content.
+    const historicalContent = [
+      '{"type":"summary","sessionId":"old-session-123"}',
+      '{"type":"message","role":"human","content":"Hello"}',
+      '{"type":"message","role":"assistant","content":"Hi there!"}',
+      "",
+    ].join("\n");
+    fs.writeFileSync(path.join(sessionsDir, "old-session-123.jsonl"), historicalContent);
+    const confirmRuntimeRepair = vi.fn(async () => false);
+    await noteStateIntegrity(cfg, { confirmRuntimeRepair, note: noteMock });
+    expect(stateIntegrityText()).not.toContain("appear to be empty or stub transcripts");
+    expect(stateIntegrityText()).not.toContain("old-session-123.jsonl");
+    // Should not even be prompted for archival
+    expect(confirmRuntimeRepair).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("orphan"),
+      }),
+    );
+    // File should remain untouched
+    const files = fs.readdirSync(sessionsDir);
+    expect(files).toContain("old-session-123.jsonl");
+    expect(files.some((name) => name.includes(".deleted."))).toBe(false);
+  });
+
+  it("flags empty transcripts not referenced in sessions.json as orphans", async () => {
+    const cfg: OpenClawConfig = {};
+    setupSessionState(cfg, process.env, process.env.HOME ?? "");
+    const sessionsDir = resolveSessionTranscriptsDirForAgent("main", process.env, () => tempHome);
+    // Write an empty transcript file — this is a genuine orphan
+    fs.writeFileSync(path.join(sessionsDir, "empty-orphan.jsonl"), "");
+    const confirmRuntimeRepair = vi.fn(async (params: { message: string }) =>
+      params.message.includes("hidden from session discovery"),
+    );
+    await noteStateIntegrity(cfg, { confirmRuntimeRepair, note: noteMock });
+    expect(stateIntegrityText()).toContain("appear to be empty or stub transcripts");
+    expect(stateIntegrityText()).toContain("empty-orphan.jsonl");
+    expect(confirmRuntimeRepair).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("hidden from session discovery"),
+      }),
+    );
   });
 
   it("prints openclaw-only verification hints when recent sessions are missing transcripts", async () => {
