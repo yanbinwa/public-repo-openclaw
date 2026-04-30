@@ -93,7 +93,7 @@ export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
   {
     commandPath: ["status"],
     policy: {
-      loadPlugins: "never",
+      loadPlugins: "text-only",
       routeConfigGuard: "when-suppressed",
       ensureCliPath: false,
       networkProxy: "bypass",

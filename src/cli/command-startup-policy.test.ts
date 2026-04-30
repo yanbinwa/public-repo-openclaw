@@ -43,7 +43,7 @@ describe("command-startup-policy", () => {
         commandPath: ["status"],
         jsonOutputMode: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldLoadPluginsForCommandPath({
         commandPath: ["status"],
