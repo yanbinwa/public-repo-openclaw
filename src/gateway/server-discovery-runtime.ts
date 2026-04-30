@@ -41,10 +41,17 @@ export async function startGatewayDiscovery(params: {
   const cliPath = mdnsMinimal ? undefined : resolveBonjourCliPath();
 
   if (localDiscoveryEnabled) {
-    const stops: Array<() => void | Promise<void>> = [];
+    // Discovery advertisement is intentionally non-blocking: mDNS probing can
+    // take 12-20+ seconds on some networks and must never delay gateway
+    // readiness.  Each service is started in the background; failures are
+    // logged but do not propagate.  See https://github.com/yanbinwa/public-repo-openclaw/issues/46
+    const pendingStops: Array<{
+      id: string;
+      started: Promise<{ stop?: () => void | Promise<void> } | void>;
+    }> = [];
     for (const entry of params.gatewayDiscoveryServices ?? []) {
-      try {
-        const started = await entry.service.advertise({
+      const started = entry.service
+        .advertise({
           machineDisplayName: params.machineDisplayName,
           gatewayPort: params.port,
           gatewayTlsEnabled: params.gatewayTls?.enabled ?? false,
@@ -54,23 +61,26 @@ export async function startGatewayDiscovery(params: {
           tailnetDns,
           cliPath,
           minimal: mdnsMinimal,
+        })
+        .catch((err: unknown) => {
+          params.logDiscovery.warn(
+            `gateway discovery service failed (${entry.service.id}, plugin=${entry.pluginId}): ${String(err)}`,
+          );
         });
-        if (started?.stop) {
-          stops.push(started.stop);
-        }
-      } catch (err) {
-        params.logDiscovery.warn(
-          `gateway discovery service failed (${entry.service.id}, plugin=${entry.pluginId}): ${String(err)}`,
-        );
-      }
+      pendingStops.push({ id: entry.service.id, started });
     }
-    if (stops.length > 0) {
+    if (pendingStops.length > 0) {
       bonjourStop = async () => {
-        for (const stop of stops.toReversed()) {
+        for (const pending of pendingStops.toReversed()) {
           try {
-            await stop();
+            const result = await pending.started;
+            if (result && typeof result === "object" && "stop" in result && result.stop) {
+              await result.stop();
+            }
           } catch (err) {
-            params.logDiscovery.warn(`gateway discovery stop failed: ${String(err)}`);
+            params.logDiscovery.warn(
+              `gateway discovery stop failed (${pending.id}): ${String(err)}`,
+            );
           }
         }
       };

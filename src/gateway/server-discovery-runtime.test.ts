@@ -114,10 +114,53 @@ describe("startGatewayDiscovery", () => {
       minimal: false,
     });
     expect(peer.service.advertise).toHaveBeenCalledTimes(1);
-    expect(logs.warn).not.toHaveBeenCalled();
 
+    // bonjourStop awaits the pending advertise promises, then calls stop in
+    // reverse order.
     await result.bonjourStop?.();
     expect(stopped).toEqual(["peer", "bonjour"]);
+    expect(logs.warn).not.toHaveBeenCalled();
+  });
+
+  it("does not block startup when a discovery service advertise is slow", async () => {
+    process.env.NODE_ENV = "development";
+    delete process.env.VITEST;
+
+    let resolveAdvertise!: (value: { stop: () => void }) => void;
+    const slowAdvertise = new Promise<{ stop: () => void }>((resolve) => {
+      resolveAdvertise = resolve;
+    });
+    const stopped: string[] = [];
+    const slowService = makeDiscoveryService({
+      id: "slow-mdns",
+      pluginId: "slow-mdns",
+      advertise: vi.fn(() => slowAdvertise),
+    });
+    const logs = makeLogs();
+
+    // startGatewayDiscovery must return immediately even though advertise
+    // has not resolved — this is the critical non-blocking guarantee.
+    const result = await startGatewayDiscovery({
+      machineDisplayName: "Lab Mac",
+      port: 18789,
+      wideAreaDiscoveryEnabled: false,
+      tailscaleMode: "off",
+      mdnsMode: "minimal",
+      gatewayDiscoveryServices: [slowService],
+      logDiscovery: logs,
+    });
+
+    expect(result.bonjourStop).not.toBeNull();
+    expect(logs.warn).not.toHaveBeenCalled();
+
+    // Now resolve the slow advertise and verify stop works.
+    resolveAdvertise({
+      stop: () => {
+        stopped.push("slow-mdns");
+      },
+    });
+    await result.bonjourStop?.();
+    expect(stopped).toEqual(["slow-mdns"]);
   });
 
   it("skips local discovery services when mDNS mode is off", async () => {
