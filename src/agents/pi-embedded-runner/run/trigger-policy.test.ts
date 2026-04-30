@@ -12,11 +12,19 @@ describe("shouldInjectHeartbeatPromptForTrigger", () => {
     ["cron"] as const,
     ["memory"] as const,
     ["overflow"] as const,
-  ])("does not inject the heartbeat prompt on %s-triggered runs", (trigger) => {
-    expect(shouldInjectHeartbeatPromptForTrigger(trigger)).toBe(false);
+  ])("injects the heartbeat prompt on %s-triggered runs (default policy)", (trigger) => {
+    expect(shouldInjectHeartbeatPromptForTrigger(trigger)).toBe(true);
   });
 
-  it("does not inject the heartbeat prompt when no trigger is supplied", () => {
-    expect(shouldInjectHeartbeatPromptForTrigger(undefined)).toBe(false);
+  it("injects the heartbeat prompt when no trigger is supplied (default policy)", () => {
+    expect(shouldInjectHeartbeatPromptForTrigger(undefined)).toBe(true);
+  });
+
+  it("defaults to injecting heartbeat prompt to prevent empty content on new sessions (regression: #47)", () => {
+    // Regression guard: changing this default to false causes MiniMax API error 2013
+    // 'chat content is empty' on new sessions with non-heartbeat triggers.
+    // See: https://github.com/yanbinwa/public-repo-openclaw/issues/47
+    expect(shouldInjectHeartbeatPromptForTrigger("user")).toBe(true);
+    expect(shouldInjectHeartbeatPromptForTrigger(undefined)).toBe(true);
   });
 });
