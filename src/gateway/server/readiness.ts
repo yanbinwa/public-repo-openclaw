@@ -94,5 +94,16 @@ function withEventLoopHealth(
   getEventLoopHealth?: () => GatewayEventLoopHealth | undefined,
 ): ReadinessResult {
   const eventLoop = getEventLoopHealth?.();
-  return eventLoop ? { ...result, eventLoop } : result;
+  if (!eventLoop) {
+    return result;
+  }
+  if (eventLoop.degraded) {
+    return {
+      ...result,
+      ready: false,
+      failing: [...result.failing, "event-loop-degraded"],
+      eventLoop,
+    };
+  }
+  return { ...result, eventLoop };
 }
