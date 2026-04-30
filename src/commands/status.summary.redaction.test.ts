@@ -49,6 +49,15 @@ describe("redactSensitiveStatusSummary", () => {
           cli: 0,
           cron: 1,
         },
+        byFailureClass: {
+          tool_runtime_error: 0,
+          provider_error: 0,
+          transport_error: 0,
+          config_error: 0,
+          timeout: 0,
+          interrupted: 0,
+          unknown_failure: 1,
+        },
       },
       taskAudit: {
         total: 1,
@@ -61,6 +70,15 @@ describe("redactSensitiveStatusSummary", () => {
           delivery_failed: 1,
           missing_cleanup: 0,
           inconsistent_timestamps: 0,
+        },
+        classifiedFailures: {
+          tool_runtime_error: 0,
+          provider_error: 0,
+          transport_error: 0,
+          config_error: 0,
+          timeout: 0,
+          interrupted: 0,
+          unknown_failure: 0,
         },
       },
       sessions: {

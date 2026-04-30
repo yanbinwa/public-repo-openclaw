@@ -1,4 +1,5 @@
 import type { DeliveryContext } from "../utils/delivery-context.types.js";
+import type { TaskFailureClass, TaskFailureClassCounts } from "./task-taxonomy.js";
 
 export type TaskRuntime = "subagent" | "acp" | "cli" | "cron";
 
@@ -34,6 +35,7 @@ export type TaskRegistrySummary = {
   failures: number;
   byStatus: TaskStatusCounts;
   byRuntime: TaskRuntimeCounts;
+  byFailureClass: TaskFailureClassCounts;
 };
 
 export type TaskEventKind = TaskStatus | "progress";
@@ -77,6 +79,7 @@ export type TaskRecord = {
   progressSummary?: string;
   terminalSummary?: string;
   terminalOutcome?: TaskTerminalOutcome;
+  failureClass?: TaskFailureClass;
 };
 
 export type TaskRegistrySnapshot = {

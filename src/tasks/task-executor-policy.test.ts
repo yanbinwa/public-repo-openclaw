@@ -97,7 +97,7 @@ describe("task-executor-policy", () => {
       "Task needs follow-up: Background task (run run-1234). Task is blocked and needs follow-up.",
     );
     expect(formatTaskTerminalMessage(failedTask)).toBe(
-      "Background task failed: Background task (run run-2234). Needs manual approval.",
+      "Background task failed (Error): Background task (run run-2234). Needs manual approval.",
     );
     expect(formatTaskStateChangeMessage(blockedTask, progressEvent)).toBeNull();
   });

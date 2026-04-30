@@ -1,4 +1,6 @@
 import type { TaskRecord } from "./task-registry.types.js";
+import type { TaskFailureClass, TaskFailureClassCounts } from "./task-taxonomy.js";
+import { createEmptyFailureClassCounts } from "./task-taxonomy.js";
 
 export type TaskAuditSeverity = "warn" | "error";
 export type TaskAuditCode =
@@ -15,6 +17,7 @@ export type TaskAuditFinding = {
   task: TaskRecord;
   ageMs?: number;
   detail: string;
+  failureClass?: TaskFailureClass;
 };
 
 export type TaskAuditSummary = {
@@ -22,6 +25,7 @@ export type TaskAuditSummary = {
   warnings: number;
   errors: number;
   byCode: Record<TaskAuditCode, number>;
+  classifiedFailures: TaskFailureClassCounts;
 };
 
 type TaskAuditComparableFinding = {
@@ -43,6 +47,7 @@ export function createEmptyTaskAuditSummary(): TaskAuditSummary {
       missing_cleanup: 0,
       inconsistent_timestamps: 0,
     },
+    classifiedFailures: createEmptyFailureClassCounts(),
   };
 }
 

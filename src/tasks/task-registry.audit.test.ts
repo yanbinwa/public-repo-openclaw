@@ -80,6 +80,15 @@ describe("task-registry audit", () => {
         missing_cleanup: 0,
         inconsistent_timestamps: 0,
       },
+      classifiedFailures: {
+        tool_runtime_error: 0,
+        provider_error: 0,
+        transport_error: 0,
+        config_error: 0,
+        timeout: 0,
+        interrupted: 0,
+        unknown_failure: 0,
+      },
     });
   });
 

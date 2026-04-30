@@ -4,6 +4,7 @@ import type {
   TaskRuntimeCounts,
   TaskStatusCounts,
 } from "./task-registry.types.js";
+import { classifyTaskFailure, createEmptyFailureClassCounts } from "./task-taxonomy.js";
 
 function createEmptyTaskStatusCounts(): TaskStatusCounts {
   return {
@@ -34,6 +35,7 @@ export function createEmptyTaskRegistrySummary(): TaskRegistrySummary {
     failures: 0,
     byStatus: createEmptyTaskStatusCounts(),
     byRuntime: createEmptyTaskRuntimeCounts(),
+    byFailureClass: createEmptyFailureClassCounts(),
   };
 }
 
@@ -50,6 +52,10 @@ export function summarizeTaskRecords(records: Iterable<TaskRecord>): TaskRegistr
     }
     if (task.status === "failed" || task.status === "timed_out" || task.status === "lost") {
       summary.failures += 1;
+      const failureClass = classifyTaskFailure(task);
+      if (failureClass) {
+        summary.byFailureClass[failureClass] += 1;
+      }
     }
   }
   return summary;

@@ -2,6 +2,8 @@ import { listTasksForFlowId } from "./runtime-internal.js";
 import { getTaskFlowRegistryRestoreFailure, listTaskFlowRecords } from "./task-flow-registry.js";
 import type { TaskFlowRecord } from "./task-flow-registry.types.js";
 import type { TaskRecord } from "./task-registry.types.js";
+import type { TaskBlockerClass, TaskBlockerClassCounts } from "./task-taxonomy.js";
+import { classifyTaskBlocker, createEmptyBlockerClassCounts } from "./task-taxonomy.js";
 
 export type TaskFlowAuditSeverity = "warn" | "error";
 export type TaskFlowAuditCode =
@@ -20,6 +22,7 @@ export type TaskFlowAuditFinding = {
   detail: string;
   ageMs?: number;
   flow?: TaskFlowRecord;
+  blockerClass?: TaskBlockerClass;
 };
 
 export type TaskFlowAuditSummary = {
@@ -27,6 +30,7 @@ export type TaskFlowAuditSummary = {
   warnings: number;
   errors: number;
   byCode: Record<TaskFlowAuditCode, number>;
+  classifiedBlockers: TaskBlockerClassCounts;
 };
 
 export type TaskFlowAuditOptions = {
@@ -50,12 +54,20 @@ function createFinding(params: {
   ageMs?: number;
   flow?: TaskFlowRecord;
 }): TaskFlowAuditFinding {
+  const blockerClass =
+    params.flow?.status === "blocked"
+      ? classifyTaskBlocker({
+          blockedSummary: params.flow.blockedSummary,
+          blockerClass: params.flow.blockerClass,
+        })
+      : undefined;
   return {
     severity: params.severity,
     code: params.code,
     detail: params.detail,
     ...(typeof params.ageMs === "number" ? { ageMs: params.ageMs } : {}),
     ...(params.flow ? { flow: params.flow } : {}),
+    ...(blockerClass ? { blockerClass } : {}),
   };
 }
 
@@ -133,6 +145,7 @@ export function createEmptyTaskFlowAuditSummary(): TaskFlowAuditSummary {
       blocked_task_missing: 0,
       inconsistent_timestamps: 0,
     },
+    classifiedBlockers: createEmptyBlockerClassCounts(),
   };
 }
 
@@ -280,6 +293,9 @@ export function summarizeTaskFlowAuditFindings(
       summary.errors += 1;
     } else {
       summary.warnings += 1;
+    }
+    if (finding.blockerClass) {
+      summary.classifiedBlockers[finding.blockerClass] += 1;
     }
   }
   return summary;

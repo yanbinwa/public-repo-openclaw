@@ -47,6 +47,7 @@ export function mapTaskRunView(task: TaskRecord): TaskRunView {
     ...(task.progressSummary ? { progressSummary: task.progressSummary } : {}),
     ...(task.terminalSummary ? { terminalSummary: task.terminalSummary } : {}),
     ...(task.terminalOutcome ? { terminalOutcome: task.terminalOutcome } : {}),
+    ...(task.failureClass ? { failureClass: task.failureClass } : {}),
   };
 }
 
@@ -64,6 +65,7 @@ export function mapTaskFlowView(flow: TaskFlowRecord): TaskFlowView {
     goal: flow.goal,
     ...(flow.currentStep ? { currentStep: flow.currentStep } : {}),
     ...(flow.cancelRequestedAt !== undefined ? { cancelRequestedAt: flow.cancelRequestedAt } : {}),
+    ...(flow.blockerClass ? { blockerClass: flow.blockerClass } : {}),
     createdAt: flow.createdAt,
     updatedAt: flow.updatedAt,
     ...(flow.endedAt !== undefined ? { endedAt: flow.endedAt } : {}),
