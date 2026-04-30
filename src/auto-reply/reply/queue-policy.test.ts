@@ -45,4 +45,52 @@ describe("resolveActiveRunQueueAction", () => {
       }),
     ).toBe("enqueue-followup");
   });
+
+  // Reset-triggered turns: callers override queueMode to "interrupt" and
+  // shouldFollowup to false when a reset command (/new, /reset) fires.
+  // These tests verify that the override produces "run-now" (GitHub issue #81).
+
+  it("runs immediately for reset-triggered turn in steer mode (caller overrides to interrupt)", () => {
+    expect(
+      resolveActiveRunQueueAction({
+        isActive: true,
+        isHeartbeat: false,
+        shouldFollowup: false,
+        queueMode: "interrupt",
+      }),
+    ).toBe("run-now");
+  });
+
+  it("runs immediately for reset-triggered turn in steer-backlog mode (caller overrides to interrupt)", () => {
+    expect(
+      resolveActiveRunQueueAction({
+        isActive: true,
+        isHeartbeat: false,
+        shouldFollowup: false,
+        queueMode: "interrupt",
+      }),
+    ).toBe("run-now");
+  });
+
+  it("runs immediately for reset-triggered turn in followup/collect mode (caller overrides to interrupt)", () => {
+    expect(
+      resolveActiveRunQueueAction({
+        isActive: true,
+        isHeartbeat: false,
+        shouldFollowup: false,
+        queueMode: "interrupt",
+      }),
+    ).toBe("run-now");
+  });
+
+  it("still enqueues non-reset steer mode runs while active (compat)", () => {
+    expect(
+      resolveActiveRunQueueAction({
+        isActive: true,
+        isHeartbeat: false,
+        shouldFollowup: false,
+        queueMode: "steer",
+      }),
+    ).toBe("enqueue-followup");
+  });
 });

@@ -927,12 +927,18 @@ export async function runReplyAgent(params: {
     }
   };
 
-  if (shouldSteer && isStreaming) {
+  // Reset-triggered turns bypass steer/followup queue behavior — they must
+  // interrupt the active run immediately (see GitHub issue #81).
+  const effectiveShouldSteer = resetTriggered ? false : shouldSteer;
+  const effectiveShouldFollowup = resetTriggered ? false : shouldFollowup;
+  const effectiveQueueMode = resetTriggered ? ("interrupt" as const) : resolvedQueue.mode;
+
+  if (effectiveShouldSteer && isStreaming) {
     const steerSessionId =
       (sessionKey ? replyRunRegistry.resolveSessionId(sessionKey) : undefined) ??
       followupRun.run.sessionId;
     const steered = queueEmbeddedPiMessage(steerSessionId, followupRun.prompt);
-    if (steered && !shouldFollowup) {
+    if (steered && !effectiveShouldFollowup) {
       await touchActiveSessionEntry();
       typing.cleanup();
       return undefined;
@@ -942,8 +948,8 @@ export async function runReplyAgent(params: {
   const activeRunQueueAction = resolveActiveRunQueueAction({
     isActive,
     isHeartbeat,
-    shouldFollowup,
-    queueMode: resolvedQueue.mode,
+    shouldFollowup: effectiveShouldFollowup,
+    queueMode: effectiveQueueMode,
   });
 
   const queuedRunFollowupTurn = createFollowupRunner({
