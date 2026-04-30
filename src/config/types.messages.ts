@@ -3,6 +3,14 @@ import type { TtsConfig } from "./types.tts.js";
 
 export type GroupChatConfig = {
   mentionPatterns?: string[];
+  /**
+   * Slack subteam (user-group) IDs that should be treated as explicit mentions.
+   * When a message contains `<!subteam^SXXX>` and `SXXX` is in this list, the
+   * agent treats it as an @-mention. Resolved with presence-as-override semantics:
+   * an explicit empty array on an agent opts that agent out even when a global
+   * list is set. IDs are compared case-insensitively.
+   */
+  subteamMentions?: string[];
   historyLimit?: number;
   /**
    * Controls how group/channel turns produce visible room replies.
