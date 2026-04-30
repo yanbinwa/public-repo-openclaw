@@ -1141,4 +1141,138 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
       nowSpy.mockRestore();
     }
   });
+
+  // --- Streaming @mention notification follow-up (#73469) ---
+
+  it("sends a follow-up mention notification after streaming card close", async () => {
+    const mentionTargets = [
+      { openId: "ou_user1", name: "Alice", key: "@_user_1" },
+      { openId: "ou_user2", name: "Bob", key: "@_user_2" },
+    ];
+    const { options } = createDispatcherHarness({
+      runtime: createRuntimeLogger(),
+      mentionTargets,
+    });
+
+    await options.deliver({ text: "```ts\nconst x = 1\n```" }, { kind: "final" });
+    await options.onIdle?.();
+
+    expect(streamingInstances).toHaveLength(1);
+    expect(streamingInstances[0].close).toHaveBeenCalledTimes(1);
+    // The close text should contain card-format mention tags
+    const closeText = streamingInstances[0].close.mock.calls[0]?.[0] as string;
+    expect(closeText).toContain("<at id=ou_user1></at>");
+    expect(closeText).toContain("<at id=ou_user2></at>");
+
+    // Follow-up text message triggers Feishu push notification
+    expect(sendMessageFeishuMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageFeishuMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "oc_chat",
+        text: "☝️",
+        mentions: mentionTargets,
+      }),
+    );
+  });
+
+  it("does not send follow-up mention notification when no mentionTargets", async () => {
+    const { options } = createDispatcherHarness({
+      runtime: createRuntimeLogger(),
+    });
+
+    await options.deliver({ text: "```ts\nconst x = 1\n```" }, { kind: "final" });
+    await options.onIdle?.();
+
+    expect(streamingInstances).toHaveLength(1);
+    expect(streamingInstances[0].close).toHaveBeenCalledTimes(1);
+    expect(sendMessageFeishuMock).not.toHaveBeenCalled();
+  });
+
+  it("does not send follow-up mention notification when mentionTargets is empty", async () => {
+    const { options } = createDispatcherHarness({
+      runtime: createRuntimeLogger(),
+      mentionTargets: [],
+    });
+
+    await options.deliver({ text: "```ts\nconst x = 1\n```" }, { kind: "final" });
+    await options.onIdle?.();
+
+    expect(streamingInstances).toHaveLength(1);
+    expect(streamingInstances[0].close).toHaveBeenCalledTimes(1);
+    expect(sendMessageFeishuMock).not.toHaveBeenCalled();
+  });
+
+  it("logs but does not throw when follow-up mention notification fails", async () => {
+    const errorSpy = vi.fn();
+    sendMessageFeishuMock.mockRejectedValueOnce(new Error("network error"));
+
+    const mentionTargets = [{ openId: "ou_user1", name: "Alice", key: "@_user_1" }];
+    const { options } = createDispatcherHarness({
+      runtime: { log: vi.fn(), error: errorSpy } as never,
+      mentionTargets,
+    });
+
+    await options.deliver({ text: "```ts\nconst x = 1\n```" }, { kind: "final" });
+    // Should not throw
+    await options.onIdle?.();
+
+    expect(streamingInstances).toHaveLength(1);
+    expect(streamingInstances[0].close).toHaveBeenCalledTimes(1);
+    expect(sendMessageFeishuMock).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("mention follow-up notification failed"),
+    );
+  });
+
+  it("does not double-notify mentions on non-streaming card path", async () => {
+    const mentionTargets = [{ openId: "ou_user1", name: "Alice", key: "@_user_1" }];
+
+    // Non-streaming: renderMode=auto, streaming=false
+    resolveFeishuAccountMock.mockReturnValue({
+      accountId: "main",
+      appId: "app_id",
+      appSecret: "app_secret",
+      domain: "feishu",
+      config: { renderMode: "auto", streaming: false },
+    });
+
+    createFeishuReplyDispatcher({
+      cfg: {} as never,
+      agentId: "agent",
+      runtime: createRuntimeLogger(),
+      chatId: "oc_chat",
+      mentionTargets,
+    });
+
+    const options = createReplyDispatcherWithTypingMock.mock.calls[0]?.[0];
+    // Markdown text triggers card path — non-streaming goes to sendStructuredCardFeishu
+    await options.deliver({ text: "```ts\nconst x = 1\n```" }, { kind: "final" });
+
+    expect(streamingInstances).toHaveLength(0);
+    expect(sendStructuredCardFeishuMock).toHaveBeenCalledTimes(1);
+    expect(sendStructuredCardFeishuMock).toHaveBeenCalledWith(
+      expect.objectContaining({ mentions: mentionTargets }),
+    );
+    // No follow-up text message — mentions already handled by the card send
+    expect(sendMessageFeishuMock).not.toHaveBeenCalled();
+  });
+
+  it("sends exactly one follow-up mention after streaming close, not on duplicate final", async () => {
+    const mentionTargets = [{ openId: "ou_user1", name: "Alice", key: "@_user_1" }];
+    const { options } = createDispatcherHarness({
+      runtime: createRuntimeLogger(),
+      mentionTargets,
+    });
+
+    await options.deliver({ text: "```ts\nconst x = 1\n```" }, { kind: "final" });
+    await options.onIdle?.();
+
+    // Duplicate final after streaming close — should be skipped by the
+    // streamingClosedForReply guard
+    await options.deliver({ text: "```ts\nconst x = 1\n```" }, { kind: "final" });
+
+    // Only one follow-up notification from the streaming close, not from the
+    // duplicate final delivery
+    expect(sendMessageFeishuMock).toHaveBeenCalledTimes(1);
+  });
 });
