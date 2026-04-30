@@ -544,7 +544,11 @@ export function pruneHistoryForContextShare(params: {
     // orphaned tool_results (whose tool_use was in the dropped chunk).
     // repairToolUseResultPairing drops orphaned tool_results, preventing
     // "unexpected tool_use_id" errors from Anthropic's API.
-    const repairReport = repairToolUseResultPairing(flatRest);
+    // Use "drop-tool-call" policy so orphan tool calls (whose results were in the
+    // dropped chunk) are stripped instead of getting synthetic error results.
+    const repairReport = repairToolUseResultPairing(flatRest, {
+      missingToolResultPolicy: "drop-tool-call",
+    });
     const repairedKept = repairReport.messages;
 
     // Track orphaned tool_results as dropped (they were in kept but their tool_use was dropped)

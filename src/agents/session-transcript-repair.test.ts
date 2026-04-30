@@ -770,3 +770,166 @@ describe("stripToolResultDetails", () => {
     expect(out).toBe(input);
   });
 });
+
+describe("repairToolUseResultPairing with missingToolResultPolicy: drop-tool-call", () => {
+  it("drops orphan tool call blocks from assistant content instead of synthesizing errors", () => {
+    const input = castAgentMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Let me check that." },
+          { type: "toolCall", id: "call_1", name: "read", arguments: {} },
+        ],
+      },
+      { role: "user", content: "thanks" },
+    ]);
+
+    const result = repairToolUseResultPairing(input, {
+      missingToolResultPolicy: "drop-tool-call",
+    });
+
+    // No synthetic error results should be added
+    expect(result.added).toHaveLength(0);
+    // Assistant message should still exist but without the orphan tool call
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages[0]?.role).toBe("assistant");
+    expect(result.messages[1]?.role).toBe("user");
+    // The assistant content should only have the text block, not the tool call
+    const assistantContent = (result.messages[0] as { content: unknown[] }).content;
+    expect(assistantContent).toHaveLength(1);
+    expect((assistantContent[0] as { type: string }).type).toBe("text");
+  });
+
+  it("drops entire assistant message when all tool calls are orphaned", () => {
+    const input = castAgentMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "call_1", name: "read", arguments: {} },
+          { type: "toolCall", id: "call_2", name: "exec", arguments: {} },
+        ],
+      },
+      { role: "user", content: "next" },
+    ]);
+
+    const result = repairToolUseResultPairing(input, {
+      missingToolResultPolicy: "drop-tool-call",
+    });
+
+    expect(result.added).toHaveLength(0);
+    // Assistant message should be dropped entirely since all tool calls are orphaned
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.role).toBe("user");
+  });
+
+  it("preserves surviving tool calls and strips only orphaned ones in mixed turns", () => {
+    const input = castAgentMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "call_1", name: "read", arguments: {} },
+          { type: "toolCall", id: "call_2", name: "exec", arguments: {} },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "call_2",
+        toolName: "exec",
+        content: [{ type: "text", text: "done" }],
+        isError: false,
+      },
+      { role: "user", content: "next" },
+    ]);
+
+    const result = repairToolUseResultPairing(input, {
+      missingToolResultPolicy: "drop-tool-call",
+    });
+
+    expect(result.added).toHaveLength(0);
+    // Should have: assistant (with only call_2), toolResult for call_2, user
+    expect(result.messages).toHaveLength(3);
+    expect(result.messages[0]?.role).toBe("assistant");
+    expect(result.messages[1]?.role).toBe("toolResult");
+    expect((result.messages[1] as { toolCallId?: string }).toolCallId).toBe("call_2");
+    expect(result.messages[2]?.role).toBe("user");
+    // Assistant content should only have call_2
+    const assistantContent = (result.messages[0] as { content: unknown[] }).content;
+    const toolCallBlocks = assistantContent.filter(
+      (b) => (b as { type?: string }).type === "toolCall",
+    );
+    expect(toolCallBlocks).toHaveLength(1);
+    expect((toolCallBlocks[0] as { id?: string }).id).toBe("call_2");
+  });
+
+  it("preserves non-tool-call content blocks when stripping orphan tool calls", () => {
+    const input = castAgentMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "I will read and execute." },
+          { type: "toolCall", id: "call_1", name: "read", arguments: {} },
+          { type: "toolCall", id: "call_2", name: "exec", arguments: {} },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "call_1",
+        toolName: "read",
+        content: [{ type: "text", text: "file contents" }],
+        isError: false,
+      },
+      { role: "user", content: "next" },
+    ]);
+
+    const result = repairToolUseResultPairing(input, {
+      missingToolResultPolicy: "drop-tool-call",
+    });
+
+    expect(result.added).toHaveLength(0);
+    expect(result.messages).toHaveLength(3);
+    // Assistant content should have text block + call_1 (surviving), but not call_2 (orphaned)
+    const assistantContent = (result.messages[0] as { content: unknown[] }).content;
+    expect(assistantContent).toHaveLength(2);
+    expect((assistantContent[0] as { type: string }).type).toBe("text");
+    expect((assistantContent[1] as { type: string; id: string }).id).toBe("call_1");
+  });
+
+  it("still synthesizes error results when default policy is used (no option)", () => {
+    const input = castAgentMessages([
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call_1", name: "read", arguments: {} }],
+      },
+      { role: "user", content: "next" },
+    ]);
+
+    const result = repairToolUseResultPairing(input);
+
+    // Default behavior: synthetic error result should be inserted
+    expect(result.added).toHaveLength(1);
+    expect(result.messages).toHaveLength(3);
+    expect(result.messages[0]?.role).toBe("assistant");
+    expect(result.messages[1]?.role).toBe("toolResult");
+    expect((result.messages[1] as { isError?: boolean }).isError).toBe(true);
+    expect(result.messages[2]?.role).toBe("user");
+  });
+
+  it("still synthesizes error results when policy is explicitly synthesize-error", () => {
+    const input = castAgentMessages([
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call_1", name: "read", arguments: {} }],
+      },
+      { role: "user", content: "next" },
+    ]);
+
+    const result = repairToolUseResultPairing(input, {
+      missingToolResultPolicy: "synthesize-error",
+    });
+
+    expect(result.added).toHaveLength(1);
+    expect(result.messages).toHaveLength(3);
+    expect(result.messages[1]?.role).toBe("toolResult");
+    expect((result.messages[1] as { isError?: boolean }).isError).toBe(true);
+  });
+});
