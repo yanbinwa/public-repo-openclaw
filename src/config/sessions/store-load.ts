@@ -114,11 +114,15 @@ export function loadSessionStore(
       fileStat = getFileStatSnapshot(storePath) ?? fileStat;
       mtimeMs = fileStat?.mtimeMs;
       break;
-    } catch {
+    } catch (err) {
       if (attempt < maxReadAttempts - 1) {
         Atomics.wait(retryBuf!, 0, 0, 50);
         continue;
       }
+      log.warn("failed to parse sessions.json; session store will appear empty", {
+        storePath,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

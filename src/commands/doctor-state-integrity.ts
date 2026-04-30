@@ -908,20 +908,29 @@ export async function noteStateIntegrity(
       .map((entry) => path.join(sessionsDir, entry.name))
       .filter(
         (filePath) => !referencedTranscriptPaths.has(resolveComparableTranscriptPath(filePath)),
-      );
+      )
+      .filter((filePath) => {
+        // A transcript with >1 JSONL line is a legitimate historical session,
+        // not a true orphan. Only flag empty or stub files (≤1 line) as orphans.
+        // This prevents archiving valid chat history that is simply no longer
+        // the "current" session in sessions.json.
+        const lineCount = countJsonlLines(filePath);
+        return lineCount <= 1;
+      });
     if (orphanTranscriptPaths.length > 0 && !suppressOrphanTranscriptWarning) {
       const orphanCount = countLabel(orphanTranscriptPaths.length, "orphan transcript file");
       const orphanPreview = formatFilePreview(orphanTranscriptPaths);
       warnings.push(
         [
           `- Found ${orphanCount} in ${displaySessionsDir}.`,
-          "  These .jsonl files are no longer referenced by sessions.json, so they are not part of any active session history.",
-          "  Doctor can archive them safely by renaming each file to *.deleted.<timestamp>.",
+          "  These .jsonl files appear to be empty or stub transcripts not referenced by sessions.json.",
+          "  Doctor can archive them by renaming each file to *.deleted.<timestamp>.",
+          "  Archived files will be hidden from session history and memory search.",
           `  Examples: ${orphanPreview}`,
         ].join("\n"),
       );
       const archiveOrphans = await prompter.confirmRuntimeRepair({
-        message: `Archive ${orphanCount} in ${displaySessionsDir}? This only renames them to *.deleted.<timestamp>.`,
+        message: `Archive ${orphanCount} in ${displaySessionsDir}? Files will be renamed to *.deleted.<timestamp> and hidden from session discovery.`,
         initialValue: false,
         requiresInteractiveConfirmation: true,
       });
