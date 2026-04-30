@@ -276,7 +276,7 @@ describe("createReadinessChecker", () => {
     });
   });
 
-  it("adds event-loop health to detailed readiness without changing readiness state", () => {
+  it("marks not ready when event-loop health is degraded", () => {
     withReadinessClock(() => {
       const { readiness } = createReadinessHarness({
         startedAgoMs: 5 * 60_000,
@@ -293,8 +293,8 @@ describe("createReadinessChecker", () => {
       });
 
       expect(readiness()).toEqual({
-        ready: true,
-        failing: [],
+        ready: false,
+        failing: ["event-loop-degraded"],
         uptimeMs: 300_000,
         eventLoop: {
           degraded: true,
@@ -304,6 +304,39 @@ describe("createReadinessChecker", () => {
           delayMaxMs: 88.7,
           utilization: 0.991,
           cpuCoreRatio: 0.973,
+        },
+      });
+    });
+  });
+
+  it("includes event-loop health without affecting readiness when not degraded", () => {
+    withReadinessClock(() => {
+      const { readiness } = createReadinessHarness({
+        startedAgoMs: 5 * 60_000,
+        accounts: {},
+        getEventLoopHealth: () => ({
+          degraded: false,
+          reasons: [],
+          intervalMs: 2_000,
+          delayP99Ms: 12.3,
+          delayMaxMs: 25.0,
+          utilization: 0.45,
+          cpuCoreRatio: 0.3,
+        }),
+      });
+
+      expect(readiness()).toEqual({
+        ready: true,
+        failing: [],
+        uptimeMs: 300_000,
+        eventLoop: {
+          degraded: false,
+          reasons: [],
+          intervalMs: 2_000,
+          delayP99Ms: 12.3,
+          delayMaxMs: 25.0,
+          utilization: 0.45,
+          cpuCoreRatio: 0.3,
         },
       });
     });
