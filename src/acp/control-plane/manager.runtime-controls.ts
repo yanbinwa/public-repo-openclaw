@@ -1,3 +1,4 @@
+import { logVerbose } from "../../globals.js";
 import { AcpRuntimeError, withAcpRuntimeErrorBoundary } from "../runtime/errors.js";
 import type { AcpRuntime, AcpRuntimeCapabilities, AcpRuntimeHandle } from "../runtime/types.js";
 import type { SessionAcpMeta } from "./manager.types.js";
@@ -95,10 +96,10 @@ export async function applyManagerRuntimeControls(params: {
         }
         for (const [key, value] of configOptions) {
           if (advertisedKeys.size > 0 && !advertisedKeys.has(key)) {
-            throw new AcpRuntimeError(
-              "ACP_BACKEND_UNSUPPORTED_CONTROL",
-              `ACP backend "${backend}" does not accept config key "${key}".`,
+            logVerbose(
+              `acp-manager: skipping unsupported config key "${key}" for ACP backend "${backend}". Advertised keys: ${[...advertisedKeys].join(", ")}.`,
             );
+            continue;
           }
           await params.runtime.setConfigOption({
             handle: params.handle,

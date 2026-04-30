@@ -3113,4 +3113,172 @@ describe("AcpSessionManager", () => {
       }),
     ).rejects.toThrow("disk locked");
   });
+
+  it("skips unsupported config keys during runTurn when backend advertises narrow configOptionKeys", async () => {
+    const runtimeState = createRuntime();
+    // Override getCapabilities to advertise only "model" and "effort"
+    runtimeState.getCapabilities.mockResolvedValue({
+      controls: ["session/set_mode", "session/set_config_option", "session/status"],
+      configOptionKeys: ["model", "effort"],
+    });
+    hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
+      id: "acpx",
+      runtime: runtimeState.runtime,
+    });
+    hoisted.readAcpSessionEntryMock.mockReturnValue({
+      sessionKey: "agent:codex:acp:session-1",
+      storeSessionKey: "agent:codex:acp:session-1",
+      acp: {
+        ...readySessionMeta(),
+        runtimeOptions: {
+          model: "claude-sonnet-4-20250514",
+          thinking: "high",
+          permissionProfile: "strict",
+          timeoutSeconds: 120,
+        },
+      },
+    });
+
+    const manager = new AcpSessionManager();
+    await manager.runTurn({
+      cfg: baseCfg,
+      sessionKey: "agent:codex:acp:session-1",
+      text: "do work",
+      mode: "prompt",
+      requestId: "run-1",
+    });
+
+    // "model" is advertised → should be sent
+    expect(runtimeState.setConfigOption).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "model", value: "claude-sonnet-4-20250514" }),
+    );
+    // "thinking", "approval_policy", "timeout" are NOT advertised → should be skipped
+    expect(runtimeState.setConfigOption).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: "thinking" }),
+    );
+    expect(runtimeState.setConfigOption).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: "approval_policy" }),
+    );
+    expect(runtimeState.setConfigOption).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: "timeout" }),
+    );
+    // Should have been called exactly once (for "model")
+    expect(runtimeState.setConfigOption).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips unsupported key in setSessionConfigOption and returns current options", async () => {
+    const runtimeState = createRuntime();
+    runtimeState.getCapabilities.mockResolvedValue({
+      controls: ["session/set_mode", "session/set_config_option", "session/status"],
+      configOptionKeys: ["model", "effort"],
+    });
+    hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
+      id: "acpx",
+      runtime: runtimeState.runtime,
+    });
+    hoisted.readAcpSessionEntryMock.mockReturnValue({
+      sessionKey: "agent:codex:acp:session-1",
+      storeSessionKey: "agent:codex:acp:session-1",
+      acp: readySessionMeta(),
+    });
+
+    const manager = new AcpSessionManager();
+    // "thinking" is not in configOptionKeys → should skip gracefully and return options
+    const result = await manager.setSessionConfigOption({
+      cfg: baseCfg,
+      sessionKey: "agent:codex:acp:session-1",
+      key: "thinking",
+      value: "high",
+    });
+
+    expect(result).toBeDefined();
+    expect(runtimeState.setConfigOption).not.toHaveBeenCalled();
+  });
+
+  it("passes through all config keys when configOptionKeys is not advertised", async () => {
+    const runtimeState = createRuntime();
+    // No configOptionKeys → all keys should pass through
+    runtimeState.getCapabilities.mockResolvedValue({
+      controls: ["session/set_mode", "session/set_config_option", "session/status"],
+    });
+    hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
+      id: "acpx",
+      runtime: runtimeState.runtime,
+    });
+    hoisted.readAcpSessionEntryMock.mockReturnValue({
+      sessionKey: "agent:codex:acp:session-1",
+      storeSessionKey: "agent:codex:acp:session-1",
+      acp: {
+        ...readySessionMeta(),
+        runtimeOptions: {
+          model: "claude-sonnet-4-20250514",
+          thinking: "high",
+          permissionProfile: "strict",
+          timeoutSeconds: 120,
+        },
+      },
+    });
+
+    const manager = new AcpSessionManager();
+    await manager.runTurn({
+      cfg: baseCfg,
+      sessionKey: "agent:codex:acp:session-1",
+      text: "do work",
+      mode: "prompt",
+      requestId: "run-1",
+    });
+
+    // All four config options should be sent
+    expect(runtimeState.setConfigOption).toHaveBeenCalledTimes(4);
+    expect(runtimeState.setConfigOption).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "model" }),
+    );
+    expect(runtimeState.setConfigOption).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "thinking" }),
+    );
+    expect(runtimeState.setConfigOption).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "approval_policy" }),
+    );
+    expect(runtimeState.setConfigOption).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "timeout" }),
+    );
+  });
+
+  it("skips all config keys when none match advertised configOptionKeys", async () => {
+    const runtimeState = createRuntime();
+    runtimeState.getCapabilities.mockResolvedValue({
+      controls: ["session/set_mode", "session/set_config_option", "session/status"],
+      configOptionKeys: ["effort", "max_tokens"],
+    });
+    hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
+      id: "acpx",
+      runtime: runtimeState.runtime,
+    });
+    hoisted.readAcpSessionEntryMock.mockReturnValue({
+      sessionKey: "agent:codex:acp:session-1",
+      storeSessionKey: "agent:codex:acp:session-1",
+      acp: {
+        ...readySessionMeta(),
+        runtimeOptions: {
+          model: "claude-sonnet-4-20250514",
+          thinking: "high",
+          permissionProfile: "strict",
+          timeoutSeconds: 120,
+        },
+      },
+    });
+
+    const manager = new AcpSessionManager();
+    await manager.runTurn({
+      cfg: baseCfg,
+      sessionKey: "agent:codex:acp:session-1",
+      text: "do work",
+      mode: "prompt",
+      requestId: "run-1",
+    });
+
+    // None of the runtime option keys (model, thinking, approval_policy, timeout) match
+    // the advertised keys (effort, max_tokens) → setConfigOption should never be called
+    expect(runtimeState.setConfigOption).not.toHaveBeenCalled();
+  });
 });
