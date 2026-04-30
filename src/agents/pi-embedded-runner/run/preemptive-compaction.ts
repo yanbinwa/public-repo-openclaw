@@ -46,6 +46,13 @@ export function shouldPreemptivelyCompactBeforePrompt(params: {
   contextTokenBudget: number;
   reserveTokens: number;
   toolResultMaxChars?: number;
+  /**
+   * When true, the context-engine assembled messages are treated as the
+   * prompt-authoritative view.  The precheck will NOT override the estimate
+   * with the larger unwindowed (pre-assembly) history, so a context engine
+   * that assembles a valid prompt under budget will not be bypassed.
+   */
+  assemblyIsPromptAuthoritative?: boolean;
 }): {
   route: PreemptiveCompactionRoute;
   shouldCompact: boolean;
@@ -61,7 +68,11 @@ export function shouldPreemptivelyCompactBeforePrompt(params: {
     systemPrompt: params.systemPrompt,
     prompt: params.prompt,
   });
-  if (params.unwindowedMessages && params.unwindowedMessages !== params.messages) {
+  if (
+    params.unwindowedMessages &&
+    params.unwindowedMessages !== params.messages &&
+    !params.assemblyIsPromptAuthoritative
+  ) {
     const unwindowedEstimatedPromptTokens = estimatePrePromptTokens({
       messages: params.unwindowedMessages,
       systemPrompt: params.systemPrompt,
